@@ -12,6 +12,10 @@ app.use(express.json());
 
 app.use("/products", productRoutes);
 
+app.get("/", (req, res) => {
+  res.send("Product Browser API Running");
+});
+
 app.listen(process.env.PORT, () => {
   console.log("Server running");
 });

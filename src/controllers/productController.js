@@ -1,4 +1,4 @@
-const pool = require("../config/db");
+const Product = require("../modules/Product");
 
 const getProducts = async (req, res) => {
   try {
@@ -6,99 +6,36 @@ const getProducts = async (req, res) => {
     const category = req.query.category;
     const cursor = req.query.cursor;
 
-    let query = "";
-    let values = [];
+    let query = {};
 
-    // First page
-    if (!cursor) {
-      if (category) {
-        query = `
-          SELECT *
-          FROM products
-          WHERE category = $1
-          ORDER BY created_at DESC, id DESC
-          LIMIT $2
-        `;
-
-        values = [category, limit];
-      } else {
-        query = `
-          SELECT *
-          FROM products
-          ORDER BY created_at DESC, id DESC
-          LIMIT $1
-        `;
-
-        values = [limit];
-      }
+    if (category) {
+      query.category = category;
     }
 
-    // Next pages
-    else {
-      const [cursorCreatedAt, cursorId] = cursor.split("_");
-
-      if (category) {
-        query = `
-          SELECT *
-          FROM products
-          WHERE category = $1
-          AND (created_at, id) < ($2, $3)
-          ORDER BY created_at DESC, id DESC
-          LIMIT $4
-        `;
-
-        values = [
-          category,
-          cursorCreatedAt,
-          Number(cursorId),
-          limit,
-        ];
-      } else {
-        query = `
-          SELECT *
-          FROM products
-          WHERE (created_at, id) < ($1, $2)
-          ORDER BY created_at DESC, id DESC
-          LIMIT $3
-        `;
-
-        values = [
-          cursorCreatedAt,
-          Number(cursorId),
-          limit,
-        ];
-      }
+    if (cursor) {
+      query._id = { $lt: cursor };
     }
 
-    const result = await pool.query(query, values);
+    const products = await Product.find(query)
+      .sort({ _id: -1 })
+      .limit(limit);
 
-    const products = result.rows;
+    const nextCursor =
+      products.length > 0
+        ? products[products.length - 1]._id
+        : null;
 
-    let nextCursor = null;
-
-    if (products.length > 0) {
-      const lastProduct = products[products.length - 1];
-
-      nextCursor =
-        `${lastProduct.created_at.toISOString()}_${lastProduct.id}`;
-    }
-
-    res.status(200).json({
+    res.json({
       success: true,
-      count: products.length,
-      nextCursor,
       products,
+      nextCursor,
     });
   } catch (error) {
-    console.error(error);
-
     res.status(500).json({
       success: false,
-      message: "Server Error",
+      message: error.message,
     });
   }
 };
 
-module.exports = {
-  getProducts,
-};
+module.exports = { getProducts };
